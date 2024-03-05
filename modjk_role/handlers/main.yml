@@ -1,0 +1,4 @@
+---
+# handlers file for modjk_role
+    - name: restart tomcat and httpd
+      shell: "apachectl restart && {{ tomcat_home }}/bin/shutdown.sh && {{ tomcat_home }}/bin/startup.sh"

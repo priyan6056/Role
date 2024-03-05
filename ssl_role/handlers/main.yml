@@ -1,0 +1,4 @@
+---
+# handlers file for ssl_role
+    - name: restart apache
+      shell: apachectl restart

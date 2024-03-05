@@ -1,0 +1,57 @@
+---
+# tasks file for modjk_role
+# Pre-req Softwares for mod jk
+    - name: Install necessary packages
+      yum:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - httpd-devel
+        - gcc
+        - libtool
+        - mod_ssl
+# Tomcat connector mod_jk
+    - name: Download and extract Tomcat Connector
+      get_url:
+        url: "https://dlcdn.apache.org/tomcat/tomcat-connectors/jk/tomcat-connectors-1.2.49-src.tar.gz"
+        dest: "/tmp/tomcat-connectors-1.2.49-src.tar.gz"
+    - name: Extract Tomcat Connector
+      ansible.builtin.command: "tar -xvf /tmp/tomcat-connectors-1.2.49-src.tar.gz -C /tmp/" #A module works only in ansible environment
+    - name: Configure and install Tomcat Connector
+      shell: "cd /tmp/tomcat-connectors-1.2.49-src/native && ./configure --with-apxs=/usr/bin/apxs && make && cd /tmp/tomcat-connectors-1.2.49-src/native/apache-2.0 && cp mod_jk.so /etc/httpd/modules/"
+#Creating workers.properties
+    - name: Create workers.properties
+      copy: # there is no source so we use content and directly write to destination
+        content: |
+          worker.list=worker1
+          worker.worker1.port=8009
+          worker.worker1.host=localhost
+          worker.worker1.type=ajp13
+        dest: /etc/httpd/conf/workers.properties
+# Creating mod_jk.shm with 777 permissions
+    - name: Create mod_jk.shm and give permission
+      file:
+        path: /etc/httpd/logs/mod_jk.shm
+        state: touch
+        mode: 0777
+# Create modjk.conf
+    - name: Create mod_jk.conf
+      copy:
+        content: |
+          LoadModule jk_module "/etc/httpd/modules/mod_jk.so"
+          JkWorkersFile /etc/httpd/conf/workers.properties
+          JkLogFile /etc/httpd/logs/mod_jk.log
+          JkLogLevel info
+          JkLogStampFormat "[%a %b %d %H:%M:%S %Y]"
+          JkOptions +ForwardKeySize +ForwardURICompat -ForwardDirectories
+          JkRequestLogFormat "%w %V %T"
+          JkShmFile /etc/httpd/logs/mod_jk.shm
+        dest: /etc/httpd/conf.modules.d/mod_jk.conf
+# Editing the tomcat configurations
+    - name: Update Tomcat server.xml
+      lineinfile:
+        path: "{{ tomcat_home }}/conf/server.xml"
+        line: '      <Connector protocol="AJP/1.3" address="0.0.0.0" port="8009" redirectPort="8443" maxParameterCount="1000" secretRequired="false" />'
+         
+        insertbefore: "<!-- Define an AJP 1.3 Connector on port 8009 -->"
+      notify: restart tomcat and httpd

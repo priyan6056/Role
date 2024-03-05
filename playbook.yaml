@@ -1,0 +1,11 @@
+- name: testing roles
+  hosts: web
+  become: yes
+    #ignore_errors: yes
+
+  roles:
+    - httpd_role
+    - tomcat_role
+    - war_role
+    - ssl_role
+    - modjk_role

@@ -1,0 +1,3 @@
+---
+# vars file for modjk_role
+     tomcat_home: /opt/apache-tomcat-10.1.19

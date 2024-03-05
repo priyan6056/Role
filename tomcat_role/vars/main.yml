@@ -1,0 +1,5 @@
+---
+# vars file for tomcat_role
+    tomcat_version: 10.1.19
+    tomcat_download_url: "https://dlcdn.apache.org/tomcat/tomcat-10/v{{ tomcat_version }}/bin/apache-tomcat-{{ tomcat_version }}.tar.gz"
+    tomcat_home: /opt/apache-tomcat-10.1.19

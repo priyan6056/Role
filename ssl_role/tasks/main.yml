@@ -1,0 +1,48 @@
+---
+# tasks file for ssl_role
+    - name: Install necessary packages
+      yum:
+        name: mod_ssl
+        state: present
+# SSL Certificate 
+    - name: Generate SSL certificate and key
+      command: "openssl req -x509 -nodes -newkey rsa:2048 -keyout /etc/httpd/conf/example.com.key -out /etc/httpd/conf/example.com.crt -subj '/C={{ country }}/ST={{ state }}/L={{ location }}/O={{ org }}/OU={{ org_unit }}/CN={{ common_name }}'"
+# C-country,ST-state,L-location,O-org,OU-org_unit,CN-common_name # ""-for mention command, -subj ''-to mention the input details
+      args:
+        chdir: /etc/httpd/conf
+      register: ssl_generation_result
+      changed_when: ssl_generation_result.stdout.find('writing new private key') != -1
+
+    - name: Ensure SSL certificate and key are generated
+      fail:
+        msg: "SSL certificate and key generation failed"
+      when: ssl_generation_result.failed
+
+# httpd.conf modification
+    - name: Add necessary Apache modules
+      lineinfile: # writing one line
+        path: /etc/httpd/conf/httpd.conf
+        line: "{{ item }}"
+      loop:
+        - "LoadModule heartmonitor_module modules/mod_heartmonitor.so"
+        - "LoadModule ssl_module modules/mod_ssl.so"
+        - "LoadModule rewrite_module modules/mod_rewrite.so"
+    - name: Update VirtualHost configuration for SSL
+      blockinfile: # add multiple lines with required spaces
+        path: /etc/httpd/conf/httpd.conf
+        block: |
+          <IfModule mod_jk.c>
+             JkMount /* worker1
+             JkMountCopy all
+          </IfModule>
+          <VirtualHost *:80>
+              RewriteEngine on
+              RewriteCond %{HTTPS} off
+              RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+          </VirtualHost>
+          <VirtualHost *:443>
+              SSLEngine on
+              SSLCertificateFile /etc/httpd/conf/example.com.crt
+              SSLCertificateKeyFile /etc/httpd/conf/example.com.key
+          </VirtualHost>
+      notify: restart apache

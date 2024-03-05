@@ -1,0 +1,22 @@
+---
+# tasks file for tomcat_role
+    # install pre-req software
+   - name: install java
+     yum:
+       name: java-11-devel
+       state: present    
+  # Download and extract tomcat
+   - name: Download Tomcat
+     get_url:
+       url: "{{ tomcat_download_url }}"
+       dest: /tmp/apache-tomcat-{{ tomcat_version }}.tar.gz
+
+   - name: Extract Tomcat archive
+     unarchive:
+       src: /tmp/apache-tomcat-{{ tomcat_version }}.tar.gz
+       dest: /opt
+       remote_src: yes # importing from another directory
+   # Start tomcat
+   - name: Start Tomcat service
+     shell: "{{ tomcat_home }}/bin/startup.sh" # shell module for running the direct shell script
+

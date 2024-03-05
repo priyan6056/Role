@@ -1,0 +1,16 @@
+---
+# tasks file for war_role
+   # download war files into webapp
+   - name: Update Tomcat permissions
+     file:
+       path: "{{ tomcat_home }}/webapps"
+       state: directory
+       mode: 0777
+
+   - name: Download WAR files
+     get_url:
+       url: "{{ item }}"
+       dest: "{{ tomcat_home }}/webapps/"
+     with_items:
+       - "{{ war_file_1_url }}"
+       - "{{ war_file_2_url }}"

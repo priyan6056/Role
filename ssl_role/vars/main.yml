@@ -1,0 +1,8 @@
+---
+# vars file for ssl_role
+  country: IN
+  state: KA
+  location: BA
+  org: VWITS
+  org_unit: VWITS
+  common_name: example.com

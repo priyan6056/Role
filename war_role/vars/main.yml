@@ -1,0 +1,5 @@
+---
+# vars file for war_role
+    war_file_1_url: "https://github.com/AKSarav/SampleWebApp/raw/master/dist/SampleWebApp.war"
+    war_file_2_url: "https://github.com/manulachathurika/Apache_Stratos_Tomcat_Applications/raw/master/Calendar.war"
+

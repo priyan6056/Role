@@ -1,0 +1,5 @@
+---
+# handlers file for war_role
+    - name: ReStart Tomcat service
+      shell: "{{ tomcat_home }}/bin/shutdown.sh"
+      shell: "{{ tomcat_home }}/bin/startup.sh"
