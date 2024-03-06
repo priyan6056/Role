@@ -1,0 +1,69 @@
+- name: install httpd and tomcat,deploy war file
+  hosts: node2 # alias
+  become: yes # become root user
+# variables to be used in code
+  vars:
+    tomcat_version: 10.1.19
+    tomcat_download_url: "https://dlcdn.apache.org/tomcat/tomcat-10/v{{ tomcat_version }}/bin/apache-tomcat-{{ tomcat_version }}.tar.gz"
+    tomcat_home: /opt/apache-tomcat-10.1.19
+    war_file_1_url: "https://github.com/AKSarav/SampleWebApp/raw/master/dist/SampleWebApp.war"
+    war_file_2_url: "https://github.com/manulachathurika/Apache_Stratos_Tomcat_Applications/raw/master/Calendar.war"
+
+  tasks:
+    # install pre-req software
+   - name: install java
+     yum:
+       name: java-11-devel
+       state: present
+# present-install,absent-remove,started-start,stopped-stop
+    # install  httpd
+   - name: install httpd
+     yum:
+       name: httpd
+       state: present
+   - name : start httpd
+     service:
+       name: httpd
+       state: started
+       enabled: yes # to start at everytime when server start
+     notify: restart httpd # to alert the handlers #mention the same name in the handler
+  # Download and extract tomcat
+   - name: Download Tomcat
+     get_url:
+       url: "{{ tomcat_download_url }}"
+       dest: /tmp/apache-tomcat-{{ tomcat_version }}.tar.gz
+
+   - name: Extract Tomcat archive
+     unarchive:
+       src: /tmp/apache-tomcat-{{ tomcat_version }}.tar.gz
+       dest: /opt
+       remote_src: yes # importing from another directory
+   # Start tomcat
+   - name: Start Tomcat service
+     shell: "{{ tomcat_home }}/bin/startup.sh" # shell module for running the direct shell script
+   # download war files into webapp
+   - name: Update Tomcat permissions
+     file:
+       path: "{{ tomcat_home }}/webapps"
+       state: directory
+       mode: 0777
+
+   - name: Download WAR files
+     get_url:
+       url: "{{ item }}"
+       dest: "{{ tomcat_home }}/webapps/"
+     with_items:
+       - "{{ war_file_1_url }}"
+       - "{{ war_file_2_url }}"
+     notify: ReStart Tomcat service #mention the same name in the handler
+  handlers:
+    # ReStart httpd
+    - name : restart httpd
+      service:
+        name: httpd
+        state: restarted #to restart
+        enabled: yes
+    # ReStart tomcat
+    - name: ReStart Tomcat service
+      shell: "{{ tomcat_home }}/bin/shutdown.sh"
+      shell: "{{ tomcat_home }}/bin/startup.sh"

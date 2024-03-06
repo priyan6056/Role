@@ -1,0 +1,114 @@
+---
+- name: Configure SSL for Apache HTTP Server
+  hosts: node1
+  become: yes
+# Define the variables
+  vars:
+    tomcat_home: /opt/apache-tomcat-10.1.19
+  tasks:
+# Pre-req Softwares for mod jk
+    - name: Install necessary packages
+      yum:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - httpd-devel
+        - gcc
+        - libtool
+        - mod_ssl
+# Tomcat connector mod_jk
+    - name: Download and extract Tomcat Connector
+      get_url:
+        url: "https://dlcdn.apache.org/tomcat/tomcat-connectors/jk/tomcat-connectors-1.2.49-src.tar.gz"
+        dest: "/tmp/tomcat-connectors-1.2.49-src.tar.gz"
+    - name: Extract Tomcat Connector
+      ansible.builtin.command: "tar -xvf /tmp/tomcat-connectors-1.2.49-src.tar.gz -C /tmp/" #A module works only in ansible environment
+    - name: Configure and install Tomcat Connector
+      shell: "cd /tmp/tomcat-connectors-1.2.49-src/native && ./configure --with-apxs=/usr/bin/apxs && make && cd /tmp/tomcat-connectors-1.2.49-src/native/apache-2.0 && cp mod_jk.so /etc/httpd/modules/"
+# SSL Certificate 
+    - name: Generate SSL certificate and key
+      command: "openssl req -x509 -nodes -newkey rsa:2048 -keyout /etc/httpd/conf/example.com.key -out /etc/httpd/conf/example.com.crt -subj '/C=IN/ST=KA/L=BA/O=VWITS/OU=VWITS/CN=example.com'"
+# C-country,ST-state,L-location,O-Organization,OU-organization unit,CN-common name # ""-for mention command, -subj ''-to mention the input details
+      args:
+        chdir: /etc/httpd/conf
+      register: ssl_generation_result
+      changed_when: ssl_generation_result.stdout.find('writing new private key') != -1
+
+    - name: Ensure SSL certificate and key are generated
+      fail:
+        msg: "SSL certificate and key generation failed"
+      when: ssl_generation_result.failed
+# httpd.conf modification
+    - name: Add necessary Apache modules
+      lineinfile: # writing one line
+        path: /etc/httpd/conf/httpd.conf
+        line: "{{ item }}"
+      loop:
+        - "LoadModule heartmonitor_module modules/mod_heartmonitor.so"
+        - "LoadModule ssl_module modules/mod_ssl.so"
+        - "LoadModule rewrite_module modules/mod_rewrite.so"
+    - name: Update VirtualHost configuration for SSL
+      blockinfile: # add multiple lines with required spaces
+        path: /etc/httpd/conf/httpd.conf
+        block: |
+          <IfModule mod_jk.c>
+             JkMount /* worker1
+             JkMountCopy all
+          </IfModule>
+          <VirtualHost *:80>
+              JkMount /* worker1
+              RewriteEngine on
+              RewriteCond %{HTTPS} off
+              RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+          </VirtualHost>
+          <VirtualHost *:443>
+              JkMount /* worker1
+              SSLEngine on
+              SSLCertificateFile /etc/httpd/conf/example.com.crt
+              SSLCertificateKeyFile /etc/httpd/conf/example.com.key
+          </VirtualHost>
+#Creating workers.properties
+    - name: Create workers.properties
+      copy: # there is no source so we use content and directly write to destination
+        content: |
+          worker.list=worker1
+          worker.worker1.port=8009
+          worker.worker1.host=localhost
+          worker.worker1.type=ajp13
+        dest: /etc/httpd/conf/workers.properties
+      notify: restart apache
+# Creating mod_jk.shm with 777 permissions
+    - name: Create mod_jk.shm and give permission
+      file:
+        path: /etc/httpd/logs/mod_jk.shm
+        state: touch
+        mode: 0777
+# Create modjk.conf
+    - name: Create mod_jk.conf
+      copy:
+        content: |
+          LoadModule jk_module "/etc/httpd/modules/mod_jk.so"
+          JkWorkersFile /etc/httpd/conf/workers.properties
+          JkLogFile /etc/httpd/logs/mod_jk.log
+          JkLogLevel info
+          JkLogStampFormat "[%a %b %d %H:%M:%S %Y]"
+          JkOptions +ForwardKeySize +ForwardURICompat -ForwardDirectories
+          JkRequestLogFormat "%w %V %T"
+          JkShmFile /etc/httpd/logs/mod_jk.shm
+        dest: /etc/httpd/conf.modules.d/mod_jk.conf
+      notify: restart apache
+# Editing the tomcat configurations
+    - name: Update Tomcat server.xml
+      lineinfile:
+        path: "{{ tomcat_home }}/conf/server.xml"
+        line: '      <Connector protocol="AJP/1.3" address="0.0.0.0" port="8009" redirectPort="8443" maxParameterCount="1000" secretRequired="false" />'
+         
+        insertbefore: "<!-- Define an AJP 1.3 Connector on port 8009 -->"
+      notify: restart tomcat
+# Define the handlers
+  handlers:
+    - name: restart apache
+      shell: apachectl restart
+    - name: restart tomcat
+      shell: "{{ tomcat_home }}/bin/shutdown.sh"
+      shell: "{{ tomcat_home }}/bin/startup.sh"
